@@ -1,0 +1,5 @@
+pycoingecko
+psycopg2
+influxdb
+coinbase
+argparse
