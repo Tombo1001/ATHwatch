@@ -23,7 +23,7 @@ print(f"InfluxDB DB Name: {InfluxDB_name}")
 debug = False
 cg = CoinGeckoAPI()
 
-def func_get_cgdata(coin, athtemp):
+def func_get_cgdata(coin, athtemp, coinsymbol):
     fiat = "usd"
     athvalue = athtemp
     try:
@@ -32,8 +32,14 @@ def func_get_cgdata(coin, athtemp):
         if cvalue > athtemp:
             athtemp = cvalue
             print("New ATH reached: $" + str(mcap[coin][fiat]))
+            #code ot calc percent from ATH
+            athper = round((100-((cvalue/athtemp)*100)), 2)
+            func_log_athpercent(coinsymbol, athper)
             return(athtemp)
         else:
+            #code ot calc percent from ATH
+            athper = (100-((cvalue/athtemp)*100))
+            func_log_athpercent(coinsymbol, athper)
             return(athvalue)
     except:
         print("Error getting market cap from Coingecko")
@@ -49,6 +55,36 @@ def func_log_ath(coin, value):
     json_body = [
         {
             "measurement": "ATH",
+            "tags": {
+                "coin": f'{coin}'
+            },
+            "fields": {
+                "value": value
+            },
+            "time": f'{datetime.utcnow().isoformat()}Z'
+        }
+    ]
+
+    try:
+        if client.write_points(json_body):
+            # do nothing
+            success = True
+        else:
+            print("ERROR writing to InfluxDB")
+    except:
+        print("ERROR writing to InfluxDB")
+
+
+def func_log_athpercent(coin, value):
+    InfluxDB_IP = os.environ['INFLUXDB_IP']
+    InfluxDB_name = os.environ['INFLUXDB_NAME']
+    InfluxDB_port = os.environ['INFLUXDB_PORT']
+    client = InfluxDBClient(host=InfluxDB_IP, port=InfluxDB_port)
+    client.switch_database(InfluxDB_name)
+
+    json_body = [
+        {
+            "measurement": "ATHper",
             "tags": {
                 "coin": f'{coin}'
             },
@@ -86,7 +122,7 @@ def func_cg_get_price():
             ath = float(row[1])
             cgcoinname = row[2]
             print(f"From DB - Coin: {coinsymbol}, ATH: ${str(ath)}, CoinGecko ID: {cgcoinname}")
-            athvalue = func_get_cgdata(cgcoinname, ath)
+            athvalue = func_get_cgdata(cgcoinname, ath, coinsymbol)
             updatequery = (f"UPDATE ath SET athvalue={float(athvalue)} WHERE coin='{coinsymbol}';")
             cur.execute(updatequery)
             con.commit()
@@ -123,7 +159,7 @@ def main(argv):
             print(f"Seconds since last PG write: {pgwritecounter}")
             pgwritecounter = pgwritecounter + 120
             func_cg_get_price()
-        sleep(120)
+        sleep(10)
 
 if __name__ == '__main__':
     main(sys.argv)
